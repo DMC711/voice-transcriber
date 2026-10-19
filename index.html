@@ -1,0 +1,697 @@
+!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Pocket Scribe - On-Device Voice Notes</title>
+  
+  <!-- iOS Home Screen Web App Meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pocket Scribe" />
+  <meta name="theme-color" content="#0F172A" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            iosbg: '#0B0F17',
+            cardbg: '#161F30',
+            cardsub: '#1E293B',
+            accent: '#38BDF8',
+            accentred: '#EF4444',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Safe-area insets for notched iPhones */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    textarea, input {
+      user-select: text;
+    }
+
+    /* Pulse wave animations */
+    @keyframes recordingPulse {
+      0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .recording-active {
+      animation: recordingPulse 1.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-iosbg text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden">
+
+  <!-- iOS Top Header -->
+  <header class="w-full max-w-xl mx-auto px-5 pt-4 pb-3 flex items-center justify-between border-b border-slate-800/80 sticky top-0 bg-iosbg/95 backdrop-blur z-20">
+    <div class="flex items-center gap-2.5">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-500 flex items-center justify-center shadow-md shadow-sky-500/20">
+        <i data-lucide="mic" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-base tracking-tight leading-tight">Pocket Scribe</h1>
+        <p class="text-[11px] text-slate-400 font-medium">100% On-Phone AI • Zero Data Sent</p>
+      </div>
+    </div>
+
+    <!-- Status Indicator Pill -->
+    <div id="statusBadge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
+      <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+      <span id="statusText">Starting engine...</span>
+    </div>
+  </header>
+
+  <!-- Notification Toast Modal -->
+  <div id="toast" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 opacity-0 pointer-events-none transform -translate-y-2">
+    <div id="toastInner" class="bg-slate-800 text-slate-100 border border-slate-700 px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-semibold">
+      <i id="toastIcon" data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+      <span id="toastMsg">Action done</span>
+    </div>
+  </div>
+
+  <!-- Main Scrollable App Container -->
+  <main class="w-full max-w-xl mx-auto px-4 py-4 flex-1 flex flex-col gap-4">
+
+    <!-- Active Recording & AI Workspace Card -->
+    <section class="bg-cardbg rounded-3xl p-5 border border-slate-800/90 shadow-xl flex flex-col gap-4 relative overflow-hidden">
+      <!-- Background Ambient Glow -->
+      <div id="glowRing" class="absolute -top-24 -right-24 w-48 h-48 bg-sky-500/10 rounded-full blur-3xl pointer-events-none transition-all duration-500"></div>
+
+      <!-- Live Timer and Sound Visualizer Canvas -->
+      <div class="flex flex-col items-center justify-center pt-2">
+        <div id="timerDisplay" class="font-mono text-3xl font-bold tracking-wider text-slate-300">
+          00:00
+        </div>
+        <p id="timerSubtext" class="text-[12px] text-slate-400 mt-1">Recommended duration: up to 2 minutes</p>
+
+        <!-- Waveform Canvas -->
+        <div class="w-full h-14 mt-3 flex items-center justify-center">
+          <canvas id="waveformCanvas" width="340" height="56" class="w-full h-full rounded-xl bg-slate-900/60 border border-slate-800"></canvas>
+        </div>
+      </div>
+
+      <!-- Primary Touch Controls -->
+      <div class="flex items-center justify-center gap-6 py-2">
+        <!-- Main Mic Toggle Button -->
+        <button id="recordBtn" disabled onclick="toggleRecording()" 
+          class="w-20 h-20 rounded-full bg-rose-600 hover:bg-rose-500 active:scale-95 disabled:opacity-40 disabled:pointer-events-none shadow-lg shadow-rose-600/30 flex items-center justify-center transition-all duration-200">
+          <i id="recordBtnIcon" data-lucide="mic" class="w-9 h-9 text-white"></i>
+        </button>
+      </div>
+
+      <!-- Progress / Engine Feedback -->
+      <div id="progressContainer" class="hidden flex flex-col gap-1.5 px-1">
+        <div class="flex justify-between text-xs text-slate-400">
+          <span id="progressLabel">Transcribing audio locally...</span>
+          <span id="progressPercent">WASM</span>
+        </div>
+        <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div id="progressBar" class="bg-gradient-to-r from-sky-400 to-blue-500 h-full w-0 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <!-- Current Transcript Output Box -->
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Current Output</label>
+          <span id="wordCountBadge" class="text-[11px] text-slate-400">0 words</span>
+        </div>
+
+        <textarea id="currentTranscript" rows="4" 
+          placeholder="Tap the red button and talk. When you stop, the transcript appears here without ever leaving your phone..."
+          class="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl p-3.5 text-sm leading-relaxed text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors resize-none"></textarea>
+      </div>
+
+      <!-- Action Buttons for Current Transcript -->
+      <div class="grid grid-cols-3 gap-2">
+        <button onclick="copyCurrentTranscript()" 
+          class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-xs font-medium text-slate-200 border border-slate-700 transition-all">
+          <i data-lucide="copy" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span>Copy</span>
+        </button>
+
+        <button onclick="exportCurrent('txt')" 
+          class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-xs font-medium text-slate-200 border border-slate-700 transition-all">
+          <i data-lucide="file-text" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>.TXT</span>
+        </button>
+
+        <button onclick="exportCurrent('md')" 
+          class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 active:scale-95 rounded-xl text-xs font-medium text-slate-200 border border-slate-700 transition-all">
+          <i data-lucide="code" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span>.MD</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Saved Notes History Section -->
+    <section class="flex flex-col gap-3 flex-1 pb-10">
+      <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+          <h2 class="text-sm font-bold text-slate-200">Notes On This Phone</h2>
+          <span id="historyCountBadge" class="bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-0.5 rounded-full border border-slate-700">0</span>
+        </div>
+
+        <button onclick="clearAllHistory()" class="text-[11px] text-rose-400/80 hover:text-rose-400 font-medium">
+          Clear All
+        </button>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="relative">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+        <input id="searchInput" type="text" placeholder="Search transcribed notes..." oninput="handleSearch()"
+          class="w-full bg-cardbg border border-slate-800 rounded-2xl pl-10 pr-4 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+      </div>
+
+      <!-- Notes Dynamic List -->
+      <div id="notesContainer" class="flex flex-col gap-2.5">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Transformers.js v3 from jsDelivr CDN -->
+  <script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3';
+
+    // Disallow external API calls; persist Whisper in Cache Storage
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+
+    // --- State variables ---
+    let transcriber = null;
+    let isRecording = false;
+    let audioStream = null;
+    let mediaRecorder = null;
+    let audioContext = null;
+    let analyserNode = null;
+    let animationFrameId = null;
+    let audioChunks = [];
+    let recordStartTime = 0;
+    let timerInterval = null;
+    let wakeLock = null;
+
+    // Inaudible silent audio loop to pin mobile Safari background media session
+    const silentAudioEl = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+    silentAudioEl.loop = true;
+
+    // --- IndexedDB Configuration ---
+    const DB_NAME = 'PocketScribeDB';
+    const DB_VER = 1;
+    const STORE_NAME = 'transcriptions';
+
+    function getDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VER);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('timestamp', 'timestamp', { unique: false });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function dbSave(text, durationSec) {
+      const db = await getDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const item = {
+          text: text.trim(),
+          duration: durationSec,
+          timestamp: new Date().toISOString()
+        };
+        const req = store.add(item);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function dbGetAll() {
+      const db = await getDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result.reverse());
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function dbDelete(id) {
+      const db = await getDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function dbClear() {
+      const db = await getDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    // --- UI Helper Functions ---
+    function updateStatus(label, type = 'normal') {
+      const badge = document.getElementById('statusBadge');
+      const text = document.getElementById('statusText');
+      text.innerText = label;
+
+      badge.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border";
+      if (type === 'loading') {
+        badge.classList.add('bg-amber-500/10', 'text-amber-300', 'border-amber-500/20');
+      } else if (type === 'ready') {
+        badge.classList.add('bg-emerald-500/10', 'text-emerald-300', 'border-emerald-500/20');
+      } else if (type === 'recording') {
+        badge.classList.add('bg-rose-500/10', 'text-rose-300', 'border-rose-500/20');
+      } else if (type === 'transcribing') {
+        badge.classList.add('bg-sky-500/10', 'text-sky-300', 'border-sky-500/20');
+      } else if (type === 'error') {
+        badge.classList.add('bg-red-500/10', 'text-red-300', 'border-red-500/20');
+      }
+    }
+
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = message;
+      if (isError) {
+        toastIcon.setAttribute('data-lucide', 'alert-circle');
+        toastIcon.classList.replace('text-emerald-400', 'text-rose-400');
+      } else {
+        toastIcon.setAttribute('data-lucide', 'check');
+        toastIcon.classList.replace('text-rose-400', 'text-emerald-400');
+      }
+      lucide.createIcons();
+
+      toast.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+      }, 2500);
+    }
+
+    // --- Keep-Alive Mechanism for iOS Safari ---
+    async function activateKeepAlive() {
+      try {
+        silentAudioEl.play().catch(() => {});
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+        }
+      } catch (err) {
+        console.warn('Wake lock unable to activate:', err);
+      }
+    }
+
+    function deactivateKeepAlive() {
+      try {
+        silentAudioEl.pause();
+        if (wakeLock) {
+          wakeLock.release().then(() => { wakeLock = null; });
+        }
+      } catch (err) {
+        console.warn('Wake lock release issue:', err);
+      }
+    }
+
+    // --- Model Initialization ---
+    async function loadWhisperModel() {
+      try {
+        updateStatus('Downloading AI (~40MB)...', 'loading');
+        document.getElementById('progressContainer').classList.remove('hidden');
+        document.getElementById('progressBar').style.width = '30%';
+
+        // Use onnx-community/whisper-tiny.en quantized for mobile iOS
+        transcriber = await pipeline(
+          'automatic-speech-recognition',
+          'onnx-community/whisper-tiny.en',
+          {
+            dtype: 'q4',
+            device: 'wasm',
+            progress_callback: (p) => {
+              if (p.status === 'progress' && p.total) {
+                const pct = Math.round((p.loaded / p.total) * 100);
+                document.getElementById('progressBar').style.width = `${pct}%`;
+                document.getElementById('progressPercent').innerText = `${pct}%`;
+              }
+            }
+          }
+        );
+
+        document.getElementById('progressContainer').classList.add('hidden');
+        updateStatus('Engine Ready', 'ready');
+        document.getElementById('recordBtn').disabled = false;
+        showToast('Whisper AI loaded on-device!');
+      } catch (err) {
+        console.error('Model load failure:', err);
+        updateStatus('Load Error', 'error');
+        showToast('Failed to load local model. Check storage or network.', true);
+      }
+    }
+
+    // --- Audio Visualizer ---
+    function initVisualizer(stream) {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      analyserNode = audioContext.createAnalyser();
+      analyserNode.fftSize = 64;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyserNode);
+
+      const canvas = document.getElementById('waveformCanvas');
+      const ctx = canvas.getContext('2d');
+      const bufferLength = analyserNode.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function draw() {
+        if (!isRecording) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          return;
+        }
+        animationFrameId = requestAnimationFrame(draw);
+        analyserNode.getByteFrequencyData(dataArray);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const barWidth = (canvas.width / bufferLength) * 1.5;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (dataArray[i] / 255) * (canvas.height * 0.85);
+          ctx.fillStyle = '#38BDF8';
+          ctx.fillRect(x, (canvas.height - barHeight) / 2, barWidth - 2, barHeight);
+          x += barWidth;
+        }
+      }
+      draw();
+    }
+
+    // --- Audio Recording & Transcribing Cycle ---
+    window.toggleRecording = async function () {
+      if (!isRecording) {
+        // Start Recording
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (err) {
+          showToast('Microphone access denied', true);
+          return;
+        }
+
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(audioStream);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.onstop = handleAudioProcessing;
+
+        mediaRecorder.start();
+        isRecording = true;
+        recordStartTime = Date.now();
+
+        // UI Updates
+        await activateKeepAlive();
+        initVisualizer(audioStream);
+        updateStatus('Listening...', 'recording');
+
+        const btn = document.getElementById('recordBtn');
+        btn.classList.add('recording-active');
+        btn.classList.replace('bg-rose-600', 'bg-amber-600');
+        document.getElementById('recordBtnIcon').setAttribute('data-lucide', 'square');
+        lucide.createIcons();
+
+        // Timer
+        timerInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - recordStartTime) / 1000);
+          const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+          const secs = String(elapsed % 60).padStart(2, '0');
+          document.getElementById('timerDisplay').innerText = `${mins}:${secs}`;
+
+          // Auto-limit safety warning around 2 minutes
+          if (elapsed >= 120) {
+            window.toggleRecording(); // auto-stop to protect memory
+          }
+        }, 1000);
+
+      } else {
+        // Stop Recording
+        isRecording = false;
+        clearInterval(timerInterval);
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+        mediaRecorder.stop();
+        audioStream.getTracks().forEach((track) => track.stop());
+
+        // UI Reset
+        const btn = document.getElementById('recordBtn');
+        btn.classList.remove('recording-active');
+        btn.classList.replace('bg-amber-600', 'bg-rose-600');
+        btn.disabled = true;
+        document.getElementById('recordBtnIcon').setAttribute('data-lucide', 'mic');
+        lucide.createIcons();
+
+        updateStatus('Transcribing...', 'transcribing');
+        document.getElementById('progressContainer').classList.remove('hidden');
+        document.getElementById('progressBar').style.width = '60%';
+      }
+    };
+
+    async function handleAudioProcessing() {
+      try {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const arrayBuffer = await audioBlob.arrayBuffer();
+
+        // Mobile Safari: decode audio at 16kHz mono (Whisper native input format)
+        const decodeCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const audioBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+        const float32Audio = audioBuffer.getChannelData(0);
+
+        document.getElementById('progressBar').style.width = '85%';
+
+        // Execute local Whisper inference
+        const result = await transcriber(float32Audio, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          language: 'english',
+          task: 'transcribe',
+          return_timestamps: false
+        });
+
+        const textOutput = result.text.trim();
+        document.getElementById('currentTranscript').value = textOutput;
+        updateWordCount(textOutput);
+
+        // Save to Local Database
+        const durationSec = Math.max(1, Math.round((Date.now() - recordStartTime) / 1000));
+        await dbSave(textOutput, durationSec);
+        await renderNotesList();
+
+        updateStatus('Ready', 'ready');
+        showToast('Note transcribed & saved locally');
+      } catch (err) {
+        console.error('Transcription error:', err);
+        showToast('Transcription failed', true);
+        updateStatus('Error', 'error');
+      } finally {
+        deactivateKeepAlive();
+        document.getElementById('progressContainer').classList.add('hidden');
+        document.getElementById('recordBtn').disabled = false;
+        document.getElementById('timerDisplay').innerText = '00:00';
+      }
+    }
+
+    function updateWordCount(str) {
+      const words = str ? str.trim().split(/\s+/).length : 0;
+      document.getElementById('wordCountBadge').innerText = `${words} words`;
+    }
+
+    document.getElementById('currentTranscript').addEventListener('input', (e) => {
+      updateWordCount(e.target.value);
+    });
+
+    // --- Exports & Clipboard Handlers ---
+    window.copyCurrentTranscript = function () {
+      const text = document.getElementById('currentTranscript').value;
+      if (!text) {
+        showToast('Nothing to copy', true);
+        return;
+      }
+      // Reliable fallback for mobile iframe sandboxes
+      const tempInput = document.createElement('textarea');
+      tempInput.value = text;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      showToast('Copied to clipboard');
+    };
+
+    window.exportCurrent = function (format) {
+      const text = document.getElementById('currentTranscript').value;
+      if (!text) {
+        showToast('Transcript is empty', true);
+        return;
+      }
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      if (format === 'txt') {
+        downloadBlob(text, `note-${stamp}.txt`, 'text/plain');
+      } else if (format === 'md') {
+        const md = `# Voice Note\n*Recorded: ${new Date().toLocaleString()}*\n\n${text}\n`;
+        downloadBlob(md, `note-${stamp}.md`, 'text/markdown');
+      }
+      showToast(`Exported .${format.toUpperCase()}`);
+    };
+
+    function downloadBlob(content, fileName, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // --- History View & Search ---
+    let cachedNotes = [];
+
+    async function renderNotesList(filterQuery = '') {
+      cachedNotes = await dbGetAll();
+      const container = document.getElementById('notesContainer');
+      const badge = document.getElementById('historyCountBadge');
+      badge.innerText = cachedNotes.length;
+
+      const filtered = filterQuery
+        ? cachedNotes.filter(n => n.text.toLowerCase().includes(filterQuery.toLowerCase()))
+        : cachedNotes;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-xs text-slate-500 bg-cardbg/50 rounded-2xl border border-slate-800">
+            ${filterQuery ? 'No matching notes found.' : 'No saved voice notes yet. Tap Record above!'}
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const dateStr = new Date(item.timestamp).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        // Escape double quotes for JS argument
+        const safeText = item.text.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+
+        return `
+          <div class="bg-cardbg rounded-2xl p-4 border border-slate-800 flex flex-col gap-2 transition hover:border-slate-700">
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+              <span class="flex items-center gap-1 font-medium">
+                <i data-lucide="calendar" class="w-3 h-3 text-sky-400"></i>
+                ${dateStr}
+              </span>
+              <span class="bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700 font-mono text-[10px]">
+                ${item.duration}s
+              </span>
+            </div>
+
+            <p class="text-xs text-slate-200 leading-relaxed line-clamp-3 select-text">${item.text}</p>
+
+            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-800/60 mt-1">
+              <button onclick="copySpecificText('${safeText}')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 flex items-center gap-1">
+                <i data-lucide="copy" class="w-3 h-3"></i> Copy
+              </button>
+              <button onclick="deleteNote(${item.id})" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-[11px] text-rose-300 flex items-center gap-1">
+                <i data-lucide="trash" class="w-3 h-3"></i> Delete
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    window.copySpecificText = function(text) {
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand('copy');
+      document.body.removeChild(temp);
+      showToast('Note copied!');
+    };
+
+    window.deleteNote = async function(id) {
+      await dbDelete(id);
+      renderNotesList(document.getElementById('searchInput').value);
+      showToast('Note deleted');
+    };
+
+    window.clearAllHistory = async function() {
+      if (cachedNotes.length === 0) return;
+      await dbClear();
+      renderNotesList();
+      showToast('History cleared');
+    };
+
+    window.handleSearch = function() {
+      const q = document.getElementById('searchInput').value;
+      renderNotesList(q);
+    };
+
+    // --- On-Load Initialization ---
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      renderNotesList();
+      loadWhisperModel();
+    });
+  </script>
+</body>
+</html>
