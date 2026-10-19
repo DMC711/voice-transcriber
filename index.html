@@ -2,121 +2,283 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Transcriber">
-  <title>Voice Transcriber</title>
+  <meta name="apple-mobile-web-app-title" content="Pocket Scribe">
+  <title>Pocket Scribe</title>
   <style>
     :root {
-      --bg: #000000;
-      --card: #1c1c1e;
-      --card-alt: #2c2c2e;
-      --accent: #0a84ff;
-      --danger: #ff453a;
-      --text: #ffffff;
-      --subtext: #8e8e93;
+      --bg: #0b111e;
+      --card: #151f32;
+      --border: #1e2d48;
+      --accent: #2563eb;
+      --accent-glow: #3b82f6;
+      --red: #ef4444;
+      --red-pulse: rgba(239, 68, 68, 0.4);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
     }
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body {
-      margin: 0;
-      padding: env(safe-area-inset-top, 20px) 16px env(safe-area-inset-bottom, 20px);
       background-color: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       min-height: 100vh;
+      padding: env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 24px);
       display: flex;
       flex-direction: column;
+      gap: 16px;
     }
-    header { text-align: center; margin-bottom: 20px; }
-    h1 { font-size: 20px; font-weight: 600; margin: 0; }
-    #status { font-size: 13px; color: var(--subtext); margin-top: 4px; }
-    .controls { display: flex; gap: 12px; margin-bottom: 16px; }
-    button {
-      flex: 1;
-      padding: 14px;
-      font-size: 16px;
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo-icon svg { width: 22px; height: 22px; fill: white; }
+    .brand-title { font-size: 17px; font-weight: 700; }
+    .brand-subtitle { font-size: 11px; color: var(--text-muted); }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      font-size: 12px;
       font-weight: 600;
+    }
+    .status-badge.listening { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+    .main-card {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 24px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+    .timer { font-size: 40px; font-weight: 700; letter-spacing: 1px; font-variant-numeric: tabular-nums; }
+    .timer-hint { font-size: 12px; color: var(--text-muted); margin-top: -12px; }
+
+    .wave-box {
+      width: 100%;
+      height: 36px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      overflow: hidden;
+    }
+    .wave-bar {
+      width: 4px;
+      height: 8px;
+      background: #38bdf8;
+      border-radius: 2px;
+      transition: height 0.1s ease;
+    }
+
+    .mic-button {
+      width: 82px;
+      height: 82px;
+      border-radius: 50%;
       border: none;
-      border-radius: 12px;
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(225, 29, 72, 0.4);
+      cursor: pointer;
+      position: relative;
+    }
+    .mic-button.recording {
+      animation: pulse 1.5s infinite;
+      background: #ef4444;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 var(--red-pulse); }
+      70% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .mic-button svg { width: 34px; height: 34px; fill: white; }
+
+    .transcript-box {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .transcript-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.5;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .tool-btn {
+      flex: 1;
+      padding: 10px;
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
     }
-    .btn-rec { background-color: var(--danger); color: white; }
-    .btn-stop { background-color: var(--card-alt); color: white; display: none; }
-    .btn-action { background-color: var(--card-alt); color: var(--accent); padding: 10px 14px; font-size: 14px; }
-    textarea {
-      width: 100%;
-      height: 140px;
-      background-color: var(--card);
-      border: 1px solid var(--card-alt);
-      border-radius: 12px;
-      padding: 12px;
-      color: var(--text);
-      font-size: 15px;
-      line-height: 1.4;
-      resize: none;
-      margin-bottom: 12px;
+    .tool-btn:active { background: #334155; }
+
+    .history-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-    .action-row { display: flex; gap: 8px; margin-bottom: 24px; }
-    h2 { font-size: 16px; color: var(--subtext); margin: 0 0 10px; font-weight: 500; }
-    #history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+    .history-title { font-size: 14px; font-weight: 600; color: var(--text-muted); }
+    .history-clear { font-size: 12px; color: #ef4444; background: none; border: none; cursor: pointer; }
+    .history-list { display: flex; flex-direction: column; gap: 8px; }
     .history-card {
-      background-color: var(--card);
-      border-radius: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
       padding: 12px;
       font-size: 14px;
     }
-    .history-meta { font-size: 11px; color: var(--subtext); margin-bottom: 6px; display: flex; justify-content: space-between; }
+    .history-meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .history-copy { color: #38bdf8; cursor: pointer; font-weight: 600; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Voice Transcriber</h1>
-    <div id="status">Ready</div>
+
+  <header class="header">
+    <div class="brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">Pocket Scribe</div>
+        <div class="brand-subtitle">100% On-Phone AI • Zero Data Sent</div>
+      </div>
+    </div>
+    <div id="statusBadge" class="status-badge">
+      <span class="status-dot"></span>
+      <span id="statusText">Ready</span>
+    </div>
   </header>
 
-  <div class="controls">
-    <button id="recBtn" class="btn-rec" onclick="startRecording()">
-      <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#fff;"></span>
-      Record
+  <div class="main-card">
+    <div id="timer" class="timer">00:00</div>
+    <div class="timer-hint">Recommended duration: up to 2 minutes</div>
+
+    <div class="wave-box" id="waveform">
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+      <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+    </div>
+
+    <button id="recordBtn" class="mic-button" onclick="toggleRecording()">
+      <svg id="micIcon" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
     </button>
-    <button id="stopBtn" class="btn-stop" onclick="stopRecording()">
-      <span style="display:inline-block; width:12px; height:12px; background:#fff;"></span>
-      Stop
-    </button>
+
+    <div class="transcript-box">
+      <div class="transcript-meta">
+        <span>Current Output</span>
+        <span id="wordCount">0 words</span>
+      </div>
+      <textarea id="liveText" placeholder="Tap the red button and talk. Words appear here instantly..."></textarea>
+    </div>
+
+    <div class="toolbar">
+      <button class="tool-btn" onclick="copyCurrent()">📋 Copy</button>
+      <button class="tool-btn" onclick="exportFile('txt')">📄 .TXT</button>
+      <button class="tool-btn" onclick="exportFile('md')">📑 .MD</button>
+    </div>
   </div>
 
-  <textarea id="liveText" placeholder="Spoken words will appear here instantly..."></textarea>
-
-  <div class="action-row">
-    <button class="btn-action" onclick="copyCurrent()">Copy Text</button>
-    <button class="btn-action" onclick="exportFile('md')">Export .MD</button>
-    <button class="btn-action" onclick="exportFile('txt')">Export .TXT</button>
-  </div>
-
-  <h2>Saved Notes</h2>
-  <div id="history"></div>
+  <section class="history-section">
+    <div class="history-header">
+      <div class="history-title">Notes On This Phone (<span id="notesCount">0</span>)</div>
+      <button class="history-clear" onclick="clearAllNotes()">Clear All</button>
+    </div>
+    <div id="historyList" class="history-list"></div>
+  </section>
 
   <script>
     let recognition = null;
-    let wakeLock = null;
+    let isRecording = false;
     let finalTranscript = '';
+    let timerInterval = null;
+    let secondsElapsed = 0;
+    let wakeLock = null;
+
     const silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
     silentAudio.loop = true;
 
-    // Check speech support
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechEngine = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    function initSpeech() {
-      if (!SpeechRecognition) {
-        document.getElementById('status').innerText = 'Speech recognition not supported on this browser';
+    function initRecognizer() {
+      if (!SpeechEngine) {
+        document.getElementById('statusText').innerText = 'Mic blocked';
         return null;
       }
-      const rec = new SpeechRecognition();
+      const rec = new SpeechEngine();
       rec.continuous = true;
       rec.interimResults = true;
       rec.lang = 'en-US';
@@ -130,28 +292,40 @@
             interim += event.results[i][0].transcript;
           }
         }
-        document.getElementById('liveText').value = finalTranscript + interim;
+        const combined = finalTranscript + interim;
+        document.getElementById('liveText').value = combined;
+        updateWordCount(combined);
       };
 
       rec.onerror = (e) => {
-        document.getElementById('status').innerText = 'Error: ' + e.error;
+        if (e.error !== 'no-speech') {
+          document.getElementById('statusText').innerText = 'Error';
+        }
       };
 
       rec.onend = () => {
-        if (document.getElementById('stopBtn').style.display === 'flex') {
-          // Keep active if recording wasn't manually stopped
-          try { rec.start(); } catch(_) {}
+        if (isRecording) {
+          try { rec.start(); } catch (_) {}
         }
       };
 
       return rec;
     }
 
+    async function toggleRecording() {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    }
+
     async function startRecording() {
       finalTranscript = '';
       document.getElementById('liveText').value = '';
+      updateWordCount('');
 
-      if (!recognition) recognition = initSpeech();
+      if (!recognition) recognition = initRecognizer();
       if (!recognition) return;
 
       try {
@@ -161,66 +335,120 @@
 
       try {
         recognition.start();
-        document.getElementById('recBtn').style.display = 'none';
-        document.getElementById('stopBtn').style.display = 'flex';
-        document.getElementById('status').innerText = 'Listening...';
-      } catch (err) {
-        document.getElementById('status').innerText = 'Mic permission needed';
+        isRecording = true;
+        document.getElementById('recordBtn').classList.add('recording');
+        document.getElementById('statusBadge').classList.add('listening');
+        document.getElementById('statusText').innerText = 'Listening';
+
+        secondsElapsed = 0;
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+          secondsElapsed++;
+          const mins = String(Math.floor(secondsElapsed / 60)).padStart(2, '0');
+          const secs = String(secondsElapsed % 60).padStart(2, '0');
+          document.getElementById('timer').innerText = `${mins}:${secs}`;
+          animateBars();
+        }, 1000);
+      } catch (e) {
+        document.getElementById('statusText').innerText = 'Allow Mic';
       }
     }
 
     function stopRecording() {
+      isRecording = false;
       if (recognition) recognition.stop();
       silentAudio.pause();
       if (wakeLock) { wakeLock.release(); wakeLock = null; }
 
-      document.getElementById('recBtn').style.display = 'flex';
-      document.getElementById('stopBtn').style.display = 'none';
-      document.getElementById('status').innerText = 'Ready';
+      clearInterval(timerInterval);
+      resetBars();
 
-      const result = document.getElementById('liveText').value.trim();
-      if (result) saveToStorage(result);
+      document.getElementById('recordBtn').classList.remove('recording');
+      document.getElementById('statusBadge').classList.remove('listening');
+      document.getElementById('statusText').innerText = 'Ready';
+
+      const content = document.getElementById('liveText').value.trim();
+      if (content) {
+        saveNote(content);
+      }
     }
 
-    function saveToStorage(text) {
-      const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-      notes.unshift({ text: text, date: new Date().toLocaleString() });
-      localStorage.setItem('notes', JSON.stringify(notes));
+    function animateBars() {
+      document.querySelectorAll('.wave-bar').forEach(bar => {
+        bar.style.height = `${Math.floor(Math.random() * 24) + 6}px`;
+      });
+    }
+
+    function resetBars() {
+      document.querySelectorAll('.wave-bar').forEach(bar => {
+        bar.style.height = '8px';
+      });
+    }
+
+    function updateWordCount(str) {
+      const count = str.trim() ? str.trim().split(/\s+/).length : 0;
+      document.getElementById('wordCount').innerText = `${count} words`;
+    }
+
+    function saveNote(text) {
+      const list = JSON.parse(localStorage.getItem('ps_notes') || '[]');
+      list.unshift({ text: text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), date: new Date().toLocaleDateString() });
+      localStorage.setItem('ps_notes', JSON.stringify(list));
       renderHistory();
     }
 
     function renderHistory() {
-      const notes = JSON.parse(localStorage.getItem('notes') || '[]');
-      const container = document.getElementById('history');
-      container.innerHTML = notes.map(n => `
+      const list = JSON.parse(localStorage.getItem('ps_notes') || '[]');
+      document.getElementById('notesCount').innerText = list.length;
+      const box = document.getElementById('historyList');
+
+      if (!list.length) {
+        box.innerHTML = '<div style="text-align:center; padding:16px; color:var(--text-muted); font-size:13px;">No saved notes yet. Tap Record above!</div>';
+        return;
+      }
+
+      box.innerHTML = list.map((item, idx) => `
         <div class="history-card">
-          <div class="history-meta">
-            <span>${n.date}</span>
-            <span style="color:var(--accent); cursor:pointer;" onclick="navigator.clipboard.writeText('${n.text.replace(/'/g, "\\'")}')">Copy</span>
+          <div class="history-meta-row">
+            <span>${item.date} • ${item.time}</span>
+            <span class="history-copy" onclick="copySpecific(${idx})">Copy</span>
           </div>
-          <div>${n.text}</div>
+          <div>${item.text}</div>
         </div>
       `).join('');
     }
 
-    function copyCurrent() {
-      const text = document.getElementById('liveText').value;
-      if (text) {
-        navigator.clipboard.writeText(text);
-        document.getElementById('status').innerText = 'Copied to clipboard!';
-        setTimeout(() => document.getElementById('status').innerText = 'Ready', 2000);
+    function copySpecific(idx) {
+      const list = JSON.parse(localStorage.getItem('ps_notes') || '[]');
+      if (list[idx]) {
+        navigator.clipboard.writeText(list[idx].text);
+        document.getElementById('statusText').innerText = 'Copied';
+        setTimeout(() => document.getElementById('statusText').innerText = 'Ready', 1500);
       }
     }
 
-    function exportFile(type) {
-      const text = document.getElementById('liveText').value;
-      if (!text) return;
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const blob = new Blob([text], { type: 'text/plain' });
+    function copyCurrent() {
+      const txt = document.getElementById('liveText').value;
+      if (txt) {
+        navigator.clipboard.writeText(txt);
+        document.getElementById('statusText').innerText = 'Copied';
+        setTimeout(() => document.getElementById('statusText').innerText = 'Ready', 1500);
+      }
+    }
+
+    function exportFile(ext) {
+      const txt = document.getElementById('liveText').value;
+      if (!txt) return;
+      const blob = new Blob([txt], { type: 'text/plain' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `note-${stamp}.${type}`;
+      a.download = `voice-note-${Date.now()}.${ext}`;
       a.click();
+    }
+
+    function clearAllNotes() {
+      localStorage.removeItem('ps_notes');
+      renderHistory();
     }
 
     renderHistory();
